@@ -35,8 +35,8 @@ RegionTimes[1].special.sessionduration = 360 -- Special time lasts 6 minutes (50
  
 local Localizations = {
     enUS = {
-        Waiting = "|c1C7BCEFFEvent:%s\nbefore the start: %s%s|r",
-        Running = "|cFF35BE21Event:%s\n%s%s until completion|r",
+        Waiting = "|c1C7BCEFFTrial of the Elements:%s\nbefore the start: %s%s|r",
+        Running = "|cFF35BE21Trial of the Elements:%s\n%s%s until completion|r",
     },
 }
  
