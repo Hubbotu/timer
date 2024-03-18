@@ -141,3 +141,14 @@ f:SetScript("OnEvent", function(self)
     printTime(self)
     end)
 end)
+
+SLASH_HUBB1 = "/hubb"
+SlashCmdList["HUBB"] = function(msg)
+    if strupper(strtrim(msg)) == "BTN" then -- toggle the shown state of the button if the type /hubb btn
+        ZAMTimer777:SetShown(not ZAMTimer777:IsShown()) -- show the button
+        return
+    end
+    updateData()
+    updateList()
+    ZAMTimer777:Show()
+end
