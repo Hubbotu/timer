@@ -1,4 +1,106 @@
 local addonName, addon = ...
+local L, MyRegion
+local RegionTimes = {
+    [1] = {
+        startTime = 1710482400, 
+        totalDuration = 18000, -- complete session time 5 hours repeating
+        A = { -- sub-session -- event runs 3 times
+            duration = 7200, -- 2 hours 
+            interval = 3600, -- runs every 2 hour
+            eventtime = 300, -- 5 minutes run time
+        },
+        B = { -- sub-session -- just waiting.
+            duration = 10500, -- 3 hours 55 minutes
+        },
+    },
+}
+ 
+--[[ TEST TIMES ONLY: over 6 minutes instead of 6 hours ]]--
+ 
+--[[
+RegionTimes[1].totalDuration = 360 -- 6 minutes
+RegionTimes[1].A.duration = 124 -- 2 minutes 4 seconds
+RegionTimes[1].A.interval = 60 -- 1 minute
+RegionTimes[1].A.eventtime = 4 -- 4 seconds
+ 
+RegionTimes[1].B.duration = 236 -- 3 minute 56 seconds
+]] --
+ 
+--[[ END TEST TIMES ]]--
+ 
+local Localizations = {
+    enUS = {
+        Waiting = "|cFFDEB887Trial of the Elements:%s\nbefore the start: %s%s|r",
+        Running = "|cFF35BE21Trial of the Elements:%s\n%s%s until completion|r",
+    },
+	ruRU = {
+        Waiting = "|cFFDEB887Испытание Стихий:%s\nдо начала: %s%s|r",
+        Running = "|cFF35BE21Испытание Стихий:%s\n%s%s до завершения|r",
+    },
+}
+ 
+------------------------------------------------------------------------------------------------------ 
+-- These might be converted to Saved Variables so each character can determine
+-- wether or not to play a sound, the alert times and colors and sound to play.
+-- If so then most of the code below will have to move into an event handler for 
+-- the PLAYER_LOGIN or PLAYER_ENTERING_WORLD event.
+local defaults = {
+    useColor = true,
+    useSound = true,
+    alert1 = 600, -- Alarm 1 set to 10 minutes before event
+    alert1Color = "|cffffff00", -- Yellow
+    alert2 = 300, -- Alarm 2 set to 5 minutes before event
+    alert2Color = "|cffff0000", -- Red
+    soundKit = 32585, -- Alarm sound
+}
+ 
+------------------------------------------------------------------------------------------------------ 
+local function CalcTime(starttime, servertime, duration, interval)
+    local timeToEvent = (starttime - servertime) % interval
+    local inEvent, timeToRun
+    if timeToEvent > (interval - duration) then -- Is there between 1:15 and 1:30 to go? If so, we're in the event
+        inEvent = true
+        timeToRun = duration - (interval - timeToEvent)
+    else                    -- Otherwise, set the timer to time to next event
+        inEvent = false
+        timeToRun = timeToEvent
+    end
+    return inEvent, timeToRun
+end
+ 
+local function printTime(self)
+    local serverTime = GetServerTime()
+    -- Calculate remaining time in current cycle
+    local remainingTime = (MyRegion.startTime - serverTime) % MyRegion.totalDuration
+    local longWait = ""
+    local inEvent
+    if remainingTime > RegionTimes[1].B.duration then -- in Session A time
+    inEvent, remainingTime = CalcTime(MyRegion.startTime, serverTime, MyRegion.A.eventtime, MyRegion.A.interval)
+    else -- in Session B time
+    longWait = "|cffffff00*|r"
+    end
+    local hideSeconds = remainingTime >= 120
+    local msg = L.Waiting
+    local msgColor = "|cffffffff"
+    if inEvent then
+        msg = L.Running
+    else
+        if defaults.useColor and remainingTime <= defaults.alert2 then
+            msgColor = defaults.alert2Color
+        elseif remainingTime <= defaults.alert1 then
+            if defaults.useSound and not self.Alerted then
+                self.Alerted = true
+                PlaySound(defaults.soundKit, "Master")
+            end
+            if defaults.useColor then
+                msgColor = defaults.alert1Color
+            end
+        end
+    end
+    self.Text:SetText(format(msg, longWait, msgColor, SecondsToTime(remainingTime, false)))
+end
+ 
+------------------------------------------------------------------------------------------------------ 
 local Backdrop = {
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
 }
@@ -8,119 +110,34 @@ local frame_y = -250
 local f = CreateFrame("Button", "ZAMTimer777", UIParent, "BackdropTemplate")
 f:SetWidth(185)                                          
 f:SetHeight(30)
+f:SetPoint("CENTER")
 f:SetBackdrop(Backdrop)
-f.text = f:CreateFontString(nil,"OVERLAY","GameTooltipText")
-f.text:SetPoint("CENTER")
 f:SetClampedToScreen(true)
-f:SetPoint("CENTER",UIParent,"CENTER",frame_x,frame_y)
 f:EnableMouse(true)
 f:SetMovable(true)
+f:SetUserPlaced(true)
 f:RegisterForDrag("LeftButton")
 f:RegisterForClicks("AnyUp")
-f:Show()
-f:RegisterEvent("PLAYER_ENTERING_WORLD")
+f.Text = f:CreateFontString(nil, "OVERLAY", "GameTooltipText")
+f.Text:SetPoint("CENTER")
+f.Elapsed = 0 -- Set starting timeout (0 second)
 f:SetScript("OnDragStart",function(self) 
     self:StartMoving()
 end)
 f:SetScript("OnDragStop",function(self)  
     self:StopMovingOrSizing()
 end)
--- first %s is replaced by the color. The second is replaced by the time. |r resets the color back to default
-local Localizations = {
-    enUS = {
-        Waiting = "|c1C7BCEFFFroststone:\nbefore the start: %s%s|r",
-        Running = "|cFF35BE21Froststone:\n%s%s until completion|r",
-    },
-}
- 
-local locale = GetLocale()
-local L = Localizations[locale] or Localizations.enUS -- Default to enUS if locale doesn't exist in the table
- 
------------------------------------------------------------------------------------------------------- 
--- These might be converted to Saved Variables so each character can determine
--- wether or not to play a sound, the alert times and colors and sound to play.
--- If so then most of the code below will have to move into an event handler for 
--- the PLAYER_LOGIN or PLAYER_ENTERING_WORLD event.
-local useColor = true
-local useSound = true
-local alert1 = 600 -- Alarm 1 set to 10 minutes before event
-local alert1Color = "|cffffff00" -- Yellow
-local alert2 = 300 -- Alarm 2 set to 5 minutes before event
-local alert2Color = "|cffff0000" -- Red
-local soundKit = 32585 -- Alarm sound
------------------------------------------------------------------------------------------------------- 
- 
-local function printTime(timetotrun, inevent)
-    local hideSeconds = timetotrun >= 120
-    local msg = L.Waiting
-    local msgColor = "|cffffffff"
-    if inevent then
-        msg = L.Running
-    else
-        if useColor and timetotrun <= alert2 then
-            msgColor = alert2Color
-        elseif timetotrun <= alert1 then
-            if useSound and not ZAMTimer777.Alerted then
-                ZAMTimer777.Alerted = true
-                PlaySound(soundKit, "Master")
-            end
-            if useColor then
-                msgColor = alert1Color
-            end
-        end
-    end
-    f.text:SetText(format(msg, msgColor, SecondsToTime(timetotrun, hideSeconds)))
-end
- 
-regionEventStartTime = {
-    [1] = { -- eu
-        starttime = 1679572800,
-        eventDuration = 600,
-        eventIntervalInSeconds = 7200,
-        enable = true,
-        datablock = {}
-    },
-}
- 
-local inEvent, timeToRun
-local eventTime = regionEventStartTime[1].eventDuration -- Time the event runs in seconds(15 mins)
-local waitTime = regionEventStartTime[1].eventIntervalInSeconds -- Time between events in seconds (90 mins)
-local startTime = regionEventStartTime[1].starttime -- Start time from the table
-local serverTime = GetServerTime()
-local timeToEvent = (startTime - serverTime) % waitTime -- Remaining time before next event starts
- 
-if timeToEvent > (waitTime - eventTime) then -- Is there between 1:15 and 1:30 to go? If so, we're in the event
-    inEvent = true
-    timeToRun = eventTime - (waitTime - timeToEvent)
-else                    -- Otherwise, set the ticker timer to time to next event
-    inEvent = false
-    timeToRun = timeToEvent
-end
-local ticker = C_Timer.NewTicker(1, function() 
-    if timeToRun > 0 then
-        timeToRun = timeToRun - 1
-        printTime(timeToRun, inEvent)
+f:RegisterEvent("PLAYER_LOGIN")
+f:SetScript("OnEvent", function(self)
+    local locale = GetLocale()
+    L = Localizations[locale] or Localizations.enUS -- Default to enUS if locale doesn't exist in the table
+    MyRegion = RegionTimes[GetCurrentRegion()] or RegionTimes[1] -- Default to region 1 (US) if it doesn't exist in the table
+    self:SetScript("OnUpdate", function(self, elapsed)
+    self.Elapsed = self.Elapsed - elapsed
+    if self.Elapsed > 0 then -- Only check once per second
         return
     end
-    ZAMTimer777.Alerted = false
-    if inEvent then -- The event just finished
-        inEvent = false
-        timeToRun = waitTime - eventTime -- Reset ticker timer to 90 minutes wait time minus 15 mins event time
-    else  -- Waiting for the next event just expired
-        inEvent = true
-        timeToRun = eventTime -- And the event is running
-    end
-    printTime(timeToRun, inEvent)
+    self.Elapsed = 1 -- reset the timeout (we've counted down 1 second)
+    printTime(self)
+    end)
 end)
-printTime(timeToRun, inEvent)
-
-SLASH_HUBB1 = "/hubb"
-SlashCmdList["HUBB"] = function(msg)
-    if strupper(strtrim(msg)) == "BTN" then -- toggle the shown state of the button if the type /hubb btn
-        ZAMTimer777:SetShown(not ZAMTimer777:IsShown()) -- show the button
-        return
-    end
-    updateData()
-    updateList()
-    ZAMTimer777:Show()
-end
