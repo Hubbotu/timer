@@ -1,4 +1,7 @@
 local addonName, addon = ...
+------------------------------------------------------------------------------------------------------ 
+-- The Data (and Settings?) Section
+ 
 local L, MyRegion
 local RegionTimes = {
     [1] = {
@@ -39,54 +42,42 @@ local Localizations = {
         Running = "Event: |cFF35BE21%s|r\n%s remaining",
         A = "Name of event A",
         B = "Name of event B",
-		C = "Name of event B",
+        C = "Name of event B",
         D = "Name of event B",
     },
-	 ruRU = {
-        Waiting = "%s осталось времени до события %s",
-        Running = "Событие: |cFF35BE21%s|r\n%s идет",
-        A = "Просторы",
-        B = "Зеленые",
-		C = "Красные",
-        D = "Белые",
+     ruRU = {
+        Waiting = "%s verbleibende Zeit bis zur Veranstaltung %s",
+        Running = "Ereignis: |cFF35BE21%s|r\n%s Kommen",
+        A = "Freiflächen",
+        B = "Grüne",
+        C = "Rote",
+        D = "Weiß",
     },
 }
-
+ 
 -- These might be converted to Saved Variables so each character can determine
 -- wether or not to play a sound, the alert times and colors and sound to play.
 -- If so then most of the code below will have to move into an event handler for 
 -- the PLAYER_LOGIN or PLAYER_ENTERING_WORLD event.
 local useColor = true
 local useSound = true
-local alert1 = 600 -- Alarm 1 set to 10 minutes before event
+local alert1 = 300 -- Alarm 1 set to 5 minutes before event
 local alert1Color = "|cffffff00" -- Yellow
-local alert2 = 300 -- Alarm 2 set to 5 minutes before event
+local alert2 = 30 -- Alarm 2 set to 30 seconds before event
 local alert2Color = "|cffff0000" -- Red
 local soundKit = 32585 -- Alarm sound
------------------------------------------------------------------------------------------------------- 
  
-local function printTime(timetotrun, inevent)
-    local hideSeconds = timetotrun >= 120
-    local msg = L.Waiting
-    local msgColor = "|cffffffff"
-    if inevent then
-        msg = L.Running
-    else
-        if useColor and timetotrun <= alert2 then
-            msgColor = alert2Color
-        elseif timetotrun <= alert1 then
-            if useSound and not ZAMTimer777.Alerted then
-                ZAMTimer777.Alerted = true
-                PlaySound(soundKit, "Master")
-            end
-            if useColor then
-                msgColor = alert1Color
-            end
-        end
-    end
-    f.text:SetText(format(msg, msgColor, SecondsToTime(timetotrun, hideSeconds)))
-end
-ZAMTimer777.Alerted = false
+--[[ TEST TIMES ONLY: over 10/3 seconds ]]--
+ 
+--[[
+local alert1 = 10 -- Alarm 1 set to 5 minutes before event
+local alert2 = 3 -- Alarm 2 set to 30 seconds before event
+]]--
+ 
+--[[ END TEST TIMES ]]--
+ 
+------------------------------------------------------------------------------------------------------ 
+--- The Calculation (work) Section
  
 local function OnUpdate(self, elapsed)
     self.Elapsed = self.Elapsed - elapsed
@@ -104,14 +95,30 @@ local function OnUpdate(self, elapsed)
     end
     local msg
     if hourRemaining > MyRegion.waitTime then
-        msg = format(L.Running, MyRegion[id].name, SecondsToTime(hourRemaining - MyRegion.waitTime, false))
+        self.Alarm = false
+        msg = format(L.Running, L[MyRegion[id].name], SecondsToTime(hourRemaining - MyRegion.waitTime, false))
     else
         id = id == 4 and 1 or id + 1
-        msg = format(L.Waiting, SecondsToTime(hourRemaining, false), MyRegion[id].name)
+        local cm = L.Waiting
+        if useColor and hourRemaining <= alert2 then
+            cm = alert2Color .. L.Waiting
+        elseif hourRemaining <= alert1 then
+            if useColor then
+                cm = alert1Color .. L.Waiting
+            end
+            if useSound and not self.Alarm then
+                self.Alarm = true
+                PlaySound(soundKit, "Master")
+            end
+        end
+        msg = format(cm, SecondsToTime(hourRemaining, false), L[MyRegion[id].name])
     end
     self.Text:SetText(msg)
     self:SetSize(self.Text:GetWidth() + 10, self.Text:GetHeight() + 10)
 end
+ 
+------------------------------------------------------------------------------------------------------ 
+-- The Visual (Frame) Section
  
 local Backdrop = {
     bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -138,6 +145,10 @@ f:SetScript("OnDragStop",function(self)
     self:StopMovingOrSizing()
 end)
  
+------------------------------------------------------------------------------------------------------ 
+-- The "Getting Started" Section:
+-- Get the players locale at login and start the OnUpdate timer (to do the work).
+ 
 f:RegisterEvent("PLAYER_LOGIN")
 f:SetScript("OnEvent", function(self)
     local locale = GetLocale()
@@ -145,43 +156,9 @@ f:SetScript("OnEvent", function(self)
     MyRegion = RegionTimes[GetCurrentRegion()] or RegionTimes[1] -- Default to region 1 (US) if it doesn't exist in the table
     f:SetScript("OnUpdate", OnUpdate)
 end)
-
------------------------------------------------------------------------------------------------------- 
--- These might be converted to Saved Variables so each character can determine
--- wether or not to play a sound, the alert times and colors and sound to play.
--- If so then most of the code below will have to move into an event handler for 
--- the PLAYER_LOGIN or PLAYER_ENTERING_WORLD event.
-local useColor = true
-local useSound = true
-local alert1 = 600 -- Alarm 1 set to 10 minutes before event
-local alert1Color = "|cffffff00" -- Yellow
-local alert2 = 300 -- Alarm 2 set to 5 minutes before event
-local alert2Color = "|cffff0000" -- Red
-local soundKit = 32585 -- Alarm sound
------------------------------------------------------------------------------------------------------- 
  
-local function printTime(timetotrun, inevent)
-    local hideSeconds = timetotrun >= 120
-    local msg = L.Waiting
-    local msgColor = "|cffffffff"
-    if inevent then
-        msg = L.Running
-    else
-        if useColor and timetotrun <= alert2 then
-            msgColor = alert2Color
-        elseif timetotrun <= alert1 then
-            if useSound and not ZAMTimer777.Alerted then
-                ZAMTimer777.Alerted = true
-                PlaySound(soundKit, "Master")
-            end
-            if useColor then
-                msgColor = alert1Color
-            end
-        end
-    end
-    f.text:SetText(format(msg, msgColor, SecondsToTime(timetotrun, hideSeconds)))
-end
-
+------------------------------------------------------------------------------------------------------ 
+-- Slash Command
  
 SLASH_ZAM4TIMER1 = "/z4" -- toggle hiding/showing the ZAMTimer_4_Events frame using just /z4
 SlashCmdList.ZAM4TIMER = function(msg)
